@@ -1,0 +1,206 @@
+
+--// TRI PHEO HUD - BLUE ANIMATED EDITION
+
+local Players = game:GetService("Players")
+local UIS = game:GetService("UserInputService")
+local RunService = game:GetService("RunService")
+local TweenService = game:GetService("TweenService")
+
+local me = Players.LocalPlayer
+local aimOn = false
+local guiLocked = false
+local target, highlight
+local dragging = false
+local dragStart, startPos
+
+-- GUI
+local gui = Instance.new("ScreenGui")
+gui.Name = "TRI PHEO HUD"
+gui.ResetOnSpawn = false
+gui.Parent = me:WaitForChild("PlayerGui")
+
+local panel = Instance.new("Frame")
+panel.Name = "MainPanel"
+panel.Size = UDim2.fromOffset(190, 100)
+panel.Position = UDim2.new(0.5, -95, 0.5, -50)
+panel.BackgroundColor3 = Color3.fromRGB(15, 18, 28)
+panel.BorderSizePixel = 0
+panel.Parent = gui
+
+Instance.new("UICorner", panel).CornerRadius = UDim.new(0, 10)
+
+-- Viền xanh chuyển màu
+local stroke = Instance.new("UIStroke")
+stroke.Color = Color3.fromRGB(120, 210, 255)
+stroke.Thickness = 2
+stroke.Parent = panel
+
+local colorTween = TweenService:Create(
+    stroke,
+    TweenInfo.new(
+        2,
+        Enum.EasingStyle.Sine,
+        Enum.EasingDirection.InOut,
+        -1,
+        true
+    ),
+    {Color = Color3.fromRGB(0, 35, 150)}
+)
+colorTween:Play()
+
+-- Tiêu đề
+local title = Instance.new("TextLabel")
+title.Size = UDim2.new(1, 0, 0, 25)
+title.BackgroundTransparency = 1
+title.Text = "TRI PHEO HUD"
+title.TextColor3 = Color3.new(1, 1, 1)
+title.Font = Enum.Font.GothamBold
+title.TextSize = 13
+title.Active = true
+title.Parent = panel
+
+local function makeButton(text, y)
+    local b = Instance.new("TextButton")
+    b.Size = UDim2.new(1, -16, 0, 27)
+    b.Position = UDim2.fromOffset(8, y)
+    b.BackgroundColor3 = Color3.fromRGB(35, 42, 58)
+    b.TextColor3 = Color3.new(1, 1, 1)
+    b.Text = text
+    b.Font = Enum.Font.GothamBold
+    b.TextSize = 11
+    b.Parent = panel
+    Instance.new("UICorner", b).CornerRadius = UDim.new(0, 6)
+    return b
+end
+
+-- Chỉ 2 nút
+local aimButton = makeButton("AIM: OFF", 30)
+local lockButton = makeButton("LOCK GUI: OFF", 63)
+
+-- Kéo toàn bộ GUI bằng tiêu đề
+title.InputBegan:Connect(function(input)
+    if guiLocked then return end
+
+    if input.UserInputType == Enum.UserInputType.MouseButton1
+        or input.UserInputType == Enum.UserInputType.Touch then
+        dragging = true
+        dragStart = input.Position
+        startPos = panel.Position
+    end
+end)
+
+UIS.InputChanged:Connect(function(input)
+    if not dragging or guiLocked then return end
+
+    if input.UserInputType == Enum.UserInputType.MouseMovement
+        or input.UserInputType == Enum.UserInputType.Touch then
+        local delta = input.Position - dragStart
+
+        panel.Position = UDim2.new(
+            startPos.X.Scale, startPos.X.Offset + delta.X,
+            startPos.Y.Scale, startPos.Y.Offset + delta.Y
+        )
+    end
+end)
+
+UIS.InputEnded:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1
+        or input.UserInputType == Enum.UserInputType.Touch then
+        dragging = false
+    end
+end)
+
+-- Khóa/mở khóa vị trí GUI
+lockButton.Activated:Connect(function()
+    guiLocked = not guiLocked
+    lockButton.Text = guiLocked and "LOCK GUI: ON" or "LOCK GUI: OFF"
+    lockButton.BackgroundColor3 = guiLocked
+        and Color3.fromRGB(15, 75, 130)
+        or Color3.fromRGB(35, 42, 58)
+end)
+
+-- Mục tiêu gần nhất
+local function findNearest()
+    local char = me.Character
+    local root = char and char:FindFirstChild("HumanoidRootPart")
+    if not root then return nil end
+
+    local nearest, nearestDistance = nil, math.huge
+
+    for _, obj in ipairs(workspace:GetDescendants()) do
+        if obj:IsA("Humanoid") and obj.Health > 0 then
+            local model = obj.Parent
+            local part = model and model:FindFirstChild("HumanoidRootPart")
+
+            if model and model:IsA("Model")
+                and model ~= char and part then
+                local distance = (part.Position - root.Position).Magnitude
+                if distance < nearestDistance then
+                    nearest = model
+                    nearestDistance = distance
+                end
+            end
+        end
+    end
+
+    return nearest
+end
+
+local function clearTarget()
+    if highlight then
+        highlight:Destroy()
+        highlight = nil
+    end
+    target = nil
+end
+
+-- AIM bật/tắt
+aimButton.Activated:Connect(function()
+    aimOn = not aimOn
+    clearTarget()
+
+    if aimOn then
+        target = findNearest()
+
+        if target then
+            highlight = Instance.new("Highlight")
+            highlight.Adornee = target
+            highlight.FillColor = Color3.fromRGB(60, 150, 255)
+            highlight.FillTransparency = 0.8
+            highlight.OutlineColor = Color3.new(1, 1, 1)
+            highlight.Parent = workspace
+        else
+            aimOn = false
+        end
+    end
+
+    aimButton.Text = aimOn and "AIM: ON" or "AIM: OFF"
+    aimButton.BackgroundColor3 = aimOn
+        and Color3.fromRGB(15, 75, 130)
+        or Color3.fromRGB(35, 42, 58)
+end)
+
+-- Hướng nhân vật về mục tiêu đã chọn
+RunService.Heartbeat:Connect(function()
+    if not aimOn then return end
+
+    local char = me.Character
+    local root = char and char:FindFirstChild("HumanoidRootPart")
+    local part = target and target:FindFirstChild("HumanoidRootPart")
+    local hum = target and target:FindFirstChildOfClass("Humanoid")
+
+    if not root or not part or not hum or hum.Health <= 0 then
+        aimOn = false
+        clearTarget()
+        aimButton.Text = "AIM: OFF"
+        aimButton.BackgroundColor3 = Color3.fromRGB(35, 42, 58)
+        return
+    end
+
+    local a, b = root.Position, part.Position
+    local flatTarget = Vector3.new(b.X, a.Y, b.Z)
+
+    if (flatTarget - a).Magnitude > 0.01 then
+        root.CFrame = CFrame.lookAt(a, flatTarget)
+    end
+end)
