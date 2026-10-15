@@ -1,0 +1,218 @@
+
+--// TRI PHEO HUD
+--// LocalScript trong StarterPlayer > StarterPlayerScripts
+
+local Players = game:GetService("Players")
+local UIS = game:GetService("UserInputService")
+local RunService = game:GetService("RunService")
+local me = Players.LocalPlayer
+
+local aim, panelLocked, toggleLocked = false, false, false
+local shown = true
+local target, highlight
+
+local gui = Instance.new("ScreenGui")
+gui.Name = "TRI PHEO HUD"
+gui.ResetOnSpawn = false
+gui.Parent = me:WaitForChild("PlayerGui")
+
+local function round(obj, radius)
+    local c = Instance.new("UICorner")
+    c.CornerRadius = UDim.new(0, radius)
+    c.Parent = obj
+end
+
+local function outline(obj, color)
+    local s = Instance.new("UIStroke")
+    s.Color = color
+    s.Thickness = 2
+    s.Parent = obj
+end
+
+-- Bảng chính
+local panel = Instance.new("Frame")
+panel.Name = "MainPanel"
+panel.Size = UDim2.fromOffset(190, 155)
+panel.Position = UDim2.new(.5, -95, .5, -77)
+panel.BackgroundColor3 = Color3.fromRGB(15, 17, 27)
+panel.BorderSizePixel = 0
+panel.Parent = gui
+round(panel, 10)
+outline(panel, Color3.fromRGB(70, 170, 255))
+
+local title = Instance.new("TextLabel")
+title.Size = UDim2.new(1, 0, 0, 28)
+title.BackgroundTransparency = 1
+title.Text = "◈ TRI PHEO HUD"
+title.TextColor3 = Color3.new(1, 1, 1)
+title.Font = Enum.Font.GothamBold
+title.TextSize = 13
+title.Parent = panel
+
+local function button(text, y)
+    local b = Instance.new("TextButton")
+    b.Size = UDim2.new(1, -16, 0, 29)
+    b.Position = UDim2.fromOffset(8, y)
+    b.BackgroundColor3 = Color3.fromRGB(35, 40, 54)
+    b.TextColor3 = Color3.new(1, 1, 1)
+    b.Font = Enum.Font.GothamBold
+    b.TextSize = 11
+    b.Text = text
+    b.Parent = panel
+    round(b, 6)
+    return b
+end
+
+local aimBtn = button("AIM: OFF", 34)
+local panelLockBtn = button("LOCK PANEL: OFF", 67)
+local toggleLockBtn = button("LOCK T BUTTON: OFF", 100)
+
+-- Nút T bật/tắt bảng
+local toggle = Instance.new("TextButton")
+toggle.Name = "ToggleHUD"
+toggle.Size = UDim2.fromOffset(46, 46)
+toggle.Position = UDim2.new(0, 12, .65, -23)
+toggle.BackgroundColor3 = Color3.fromRGB(15, 20, 45)
+toggle.Text = "T"
+toggle.TextColor3 = Color3.fromRGB(150, 210, 255)
+toggle.Font = Enum.Font.GothamBlack
+toggle.TextSize = 28
+toggle.Parent = gui
+round(toggle, 23)
+outline(toggle, Color3.fromRGB(70, 180, 255))
+
+toggle.Activated:Connect(function()
+    shown = not shown
+    panel.Visible = shown
+end)
+
+-- Kéo bảng chính và nút T riêng biệt
+local dragData = {}
+
+local function enableDrag(obj, isToggle)
+    obj.InputBegan:Connect(function(input)
+        if input.UserInputType ~= Enum.UserInputType.Touch
+            and input.UserInputType ~= Enum.UserInputType.MouseButton1 then
+            return
+        end
+
+        if isToggle and toggleLocked then return end
+        if not isToggle and panelLocked then return end
+
+        dragData[obj] = {
+            start = input.Position,
+            position = obj.Position,
+            input = input
+        }
+    end)
+
+    UIS.InputChanged:Connect(function(input)
+        local data = dragData[obj]
+        if not data then return end
+
+        if input.UserInputType == Enum.UserInputType.MouseMovement
+            or input.UserInputType == Enum.UserInputType.Touch then
+            local delta = input.Position - data.start
+            obj.Position = UDim2.new(
+                data.position.X.Scale,
+                data.position.X.Offset + delta.X,
+                data.position.Y.Scale,
+                data.position.Y.Offset + delta.Y
+            )
+        end
+    end)
+
+    UIS.InputEnded:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1
+            or input.UserInputType == Enum.UserInputType.Touch then
+            dragData[obj] = nil
+        end
+    end)
+end
+
+enableDrag(panel, false)
+enableDrag(toggle, true)
+
+panelLockBtn.Activated:Connect(function()
+    panelLocked = not panelLocked
+    panelLockBtn.Text = panelLocked and "LOCK PANEL: ON" or "LOCK PANEL: OFF"
+end)
+
+toggleLockBtn.Activated:Connect(function()
+    toggleLocked = not toggleLocked
+    toggleLockBtn.Text = toggleLocked
+        and "LOCK T BUTTON: ON"
+        or "LOCK T BUTTON: OFF"
+end)
+
+-- Tìm mục tiêu gần nhất
+local function findNearest()
+    local ch = me.Character
+    local root = ch and ch:FindFirstChild("HumanoidRootPart")
+    if not root then return nil end
+
+    local best, distance = nil, math.huge
+
+    for _, obj in ipairs(workspace:GetDescendants()) do
+        if obj:IsA("Humanoid") and obj.Health > 0 then
+            local model = obj.Parent
+            local part = model and model:FindFirstChild("HumanoidRootPart")
+
+            if model and model:IsA("Model") and model ~= ch and part then
+                local d = (part.Position - root.Position).Magnitude
+                if d < distance then
+                    best, distance = model, d
+                end
+            end
+        end
+    end
+
+    return best
+end
+
+local function clearTarget()
+    if highlight then highlight:Destroy() end
+    highlight, target = nil, nil
+end
+
+aimBtn.Activated:Connect(function()
+    aim = not aim
+    clearTarget()
+
+    if aim then
+        target = findNearest()
+        if target then
+            highlight = Instance.new("Highlight")
+            highlight.Adornee = target
+            highlight.FillColor = Color3.fromRGB(50, 150, 255)
+            highlight.FillTransparency = .8
+            highlight.OutlineColor = Color3.new(1, 1, 1)
+            highlight.Parent = workspace
+        end
+    end
+
+    aimBtn.Text = aim and "AIM: ON" or "AIM: OFF"
+end)
+
+RunService.Heartbeat:Connect(function()
+    if not aim then return end
+
+    local ch = me.Character
+    local root = ch and ch:FindFirstChild("HumanoidRootPart")
+    local tr = target and target:FindFirstChild("HumanoidRootPart")
+    local hum = target and target:FindFirstChildOfClass("Humanoid")
+
+    if not root or not tr or not hum or hum.Health <= 0 then
+        aim = false
+        clearTarget()
+        aimBtn.Text = "AIM: OFF"
+        return
+    end
+
+    local a, b = root.Position, tr.Position
+    local flat = Vector3.new(b.X, a.Y, b.Z)
+
+    if (flat - a).Magnitude > .01 then
+        root.CFrame = CFrame.lookAt(a, flat)
+    end
+end)
